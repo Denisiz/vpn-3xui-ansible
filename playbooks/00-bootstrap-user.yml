@@ -3,6 +3,8 @@
   hosts: vpn
   gather_facts: false
   become: true
+  vars_files:
+    - ../group_vars/vpn.yml
 
   pre_tasks:
     - name: Ensure Python is available for Ansible modules

@@ -3,6 +3,8 @@
   hosts: vpn
   gather_facts: true
   become: true
+  vars_files:
+    - ../group_vars/vpn.yml
 
   roles:
     - role: docker_host
