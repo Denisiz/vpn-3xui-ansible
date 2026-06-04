@@ -2,7 +2,9 @@
 torotin_repo_url: "https://github.com/Torotin/3x-ui_pro_Docker.git"
 torotin_repo_version: "main"
 torotin_project_src: "/srv/3x-ui_pro_Docker"
+torotin_repo_force_update: true
 torotin_install_root: "/srv/docker-proxy"
+torotin_installer_log_path: "/var/log/torotin-3xui-install.log"
 torotin_destroy_docker_data: true
 torotin_apply_firewall: true
 torotin_apply_ssh: true

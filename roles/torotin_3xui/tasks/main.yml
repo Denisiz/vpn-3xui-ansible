@@ -52,6 +52,7 @@
     dest: "{{ torotin_project_src }}"
     version: "{{ torotin_repo_version }}"
     update: true
+    force: "{{ torotin_repo_force_update | bool }}"
 
 - name: Make installer executable
   ansible.builtin.file:
@@ -60,15 +61,22 @@
 
 - name: Check installer before changes
   ansible.builtin.command:
-    cmd: "script/install.sh doctor{% if torotin_doctor_verbose | bool %} --verbose{% endif %}"
+    cmd: "./script/install.sh doctor{% if torotin_doctor_verbose | bool %} --verbose{% endif %}"
     chdir: "{{ torotin_project_src }}"
   environment: "{{ torotin_installer_environment }}"
   changed_when: false
+  failed_when: false
+  register: torotin_pre_doctor
   no_log: "{{ torotin_hide_sensitive_logs | bool }}"
+
+- name: Show pre-install doctor status
+  ansible.builtin.debug:
+    msg: "Pre-install doctor exited with rc={{ torotin_pre_doctor.rc }}. Continuing because fresh hosts can fail doctor before Docker/firewall/compose steps are installed."
+  when: torotin_pre_doctor.rc != 0
 
 - name: Optionally self-update installer
   ansible.builtin.command:
-    cmd: "script/install.sh self-update --branch {{ torotin_repo_version }} --yes"
+    cmd: "./script/install.sh self-update --branch {{ torotin_repo_version }} --yes"
     chdir: "{{ torotin_project_src }}"
   environment: "{{ torotin_installer_environment }}"
   when: torotin_run_self_update | bool
@@ -77,15 +85,11 @@
 - name: Run Torotin batch installer
   ansible.builtin.shell: |
     set -e
-    script/install.sh run apt --apply --yes
-    script/install.sh run env
-    script/install.sh run docker{% if torotin_destroy_docker_data | bool %} --destroy-docker-data{% endif %}
-    script/install.sh run user
-    script/install.sh run firewall{% if torotin_apply_firewall | bool %} --apply --yes{% endif %}
-    script/install.sh run ssh{% if torotin_apply_ssh | bool %} --apply --yes{% endif %}
-    script/install.sh run network{% if torotin_apply_network | bool %} --apply --yes{% endif %}
-    script/install.sh run compose
-    script/install.sh run final
+    {
+      echo "== Torotin install started at $(date -Is) =="
+      ./script/install.sh run apt env docker user firewall ssh network compose final{% if torotin_destroy_docker_data | bool %} --destroy-docker-data{% endif %}{% if torotin_apply_firewall or torotin_apply_ssh or torotin_apply_network %} --apply --yes{% endif %}
+      echo "== Torotin install finished at $(date -Is) =="
+    } 2>&1 | tee "{{ torotin_installer_log_path }}"
   args:
     chdir: "{{ torotin_project_src }}"
     executable: /bin/bash
@@ -94,7 +98,7 @@
 
 - name: Check installer after changes
   ansible.builtin.command:
-    cmd: "script/install.sh doctor{% if torotin_doctor_verbose | bool %} --verbose{% endif %}"
+    cmd: "./script/install.sh doctor{% if torotin_doctor_verbose | bool %} --verbose{% endif %}"
     chdir: "{{ torotin_project_src }}"
   environment: "{{ torotin_installer_environment }}"
   changed_when: false

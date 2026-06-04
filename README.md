@@ -13,8 +13,11 @@ The repository prepares a fresh Debian/Ubuntu server and runs the Torotin instal
 - Passes installer variables through environment variables.
 - Runs `doctor`, `apt`, `env`, `docker`, `user`, `firewall`, `ssh`, `network`, `compose`, and `final`.
 - Validates the compose stack after installation.
+- Writes installer output on the server to `/var/log/torotin-3xui-install.log` by default.
 
 Torotin's installer owns Docker installation/reinstall, firewall, SSH, sysctl, compose, and final checks. This Ansible project does not reimplement that logic; it makes it reproducible.
+
+The installer repository under `torotin_project_src` is treated as disposable source code. By default, Ansible force-updates it before running installer steps.
 
 ## Requirements
 
@@ -104,6 +107,17 @@ torotin_apply_network: true
 ```
 
 Torotin documents these as explicit host-changing actions. Use a fresh VPS unless you know exactly what is already running on the host.
+
+## Troubleshooting
+
+If the installer step fails while Ansible output is hidden, inspect the server-side log:
+
+```bash
+ssh -p 22 deployer@YOUR_SERVER_IP
+sudo tail -n 200 /var/log/torotin-3xui-install.log
+```
+
+After SSH hardening has changed the port, use `-p 22022` or your configured `torotin_ssh_port`.
 
 ## Project Layout
 
