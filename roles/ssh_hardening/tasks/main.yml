@@ -1,0 +1,4 @@
+---
+- name: Explain SSH hardening ownership
+  ansible.builtin.debug:
+    msg: "SSH port and auth hardening are applied by the Torotin installer when torotin_apply_ssh=true and torotin_ssh_public_key is set."

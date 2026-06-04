@@ -1,0 +1,112 @@
+---
+- name: Validate supported OS family
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == "Debian"
+      - ansible_service_mgr == "systemd"
+    fail_msg: "Torotin/3x-ui_pro_Docker supports Debian/Ubuntu with systemd and apt."
+
+- name: Validate Torotin variables
+  ansible.builtin.assert:
+    that:
+      - torotin_webdomain is defined
+      - torotin_webdomain | length > 3
+      - torotin_user_ssh is defined
+      - torotin_user_ssh | length > 0
+      - torotin_pass_ssh is defined
+      - torotin_pass_ssh | length > 0
+      - torotin_user_web is defined
+      - torotin_user_web | length > 0
+      - torotin_pass_web is defined
+      - torotin_pass_web | length > 0
+      - torotin_ssh_port is defined
+      - torotin_ssh_public_key is defined
+      - torotin_ssh_public_key | length > 20
+    fail_msg: "Copy group_vars/vpn.yml.example to group_vars/vpn.yml and fill all CHANGE_ME values."
+
+- name: Build installer environment
+  ansible.builtin.set_fact:
+    torotin_installer_environment: >-
+      {{
+        {
+          'INSTALL_ROOT': torotin_install_root,
+          'WEBDOMAIN': torotin_webdomain,
+          'USER_SSH': torotin_user_ssh,
+          'PASS_SSH': torotin_pass_ssh,
+          'USER_WEB': torotin_user_web,
+          'PASS_WEB': torotin_pass_web,
+          'PORT_REMOTE_SSH': torotin_ssh_port | string,
+          'SSH_PBK': torotin_ssh_public_key
+        }
+        | combine(
+            {'INSTALL_STATE_DIR': torotin_install_state_dir}
+            if torotin_install_state_dir is defined and torotin_install_state_dir | length > 0
+            else {}
+          )
+      }}
+  no_log: "{{ torotin_hide_sensitive_logs | bool }}"
+
+- name: Clone Torotin installer repository
+  ansible.builtin.git:
+    repo: "{{ torotin_repo_url }}"
+    dest: "{{ torotin_project_src }}"
+    version: "{{ torotin_repo_version }}"
+    update: true
+
+- name: Make installer executable
+  ansible.builtin.file:
+    path: "{{ torotin_project_src }}/script/install.sh"
+    mode: "0755"
+
+- name: Check installer before changes
+  ansible.builtin.command:
+    cmd: "script/install.sh doctor{% if torotin_doctor_verbose | bool %} --verbose{% endif %}"
+    chdir: "{{ torotin_project_src }}"
+  environment: "{{ torotin_installer_environment }}"
+  changed_when: false
+  no_log: "{{ torotin_hide_sensitive_logs | bool }}"
+
+- name: Optionally self-update installer
+  ansible.builtin.command:
+    cmd: "script/install.sh self-update --branch {{ torotin_repo_version }} --yes"
+    chdir: "{{ torotin_project_src }}"
+  environment: "{{ torotin_installer_environment }}"
+  when: torotin_run_self_update | bool
+  no_log: "{{ torotin_hide_sensitive_logs | bool }}"
+
+- name: Run Torotin batch installer
+  ansible.builtin.shell: |
+    set -e
+    script/install.sh run apt --apply --yes
+    script/install.sh run env
+    script/install.sh run docker{% if torotin_destroy_docker_data | bool %} --destroy-docker-data{% endif %}
+    script/install.sh run user
+    script/install.sh run firewall{% if torotin_apply_firewall | bool %} --apply --yes{% endif %}
+    script/install.sh run ssh{% if torotin_apply_ssh | bool %} --apply --yes{% endif %}
+    script/install.sh run network{% if torotin_apply_network | bool %} --apply --yes{% endif %}
+    script/install.sh run compose
+    script/install.sh run final
+  args:
+    chdir: "{{ torotin_project_src }}"
+    executable: /bin/bash
+  environment: "{{ torotin_installer_environment }}"
+  no_log: "{{ torotin_hide_sensitive_logs | bool }}"
+
+- name: Check installer after changes
+  ansible.builtin.command:
+    cmd: "script/install.sh doctor{% if torotin_doctor_verbose | bool %} --verbose{% endif %}"
+    chdir: "{{ torotin_project_src }}"
+  environment: "{{ torotin_installer_environment }}"
+  changed_when: false
+  no_log: "{{ torotin_hide_sensitive_logs | bool }}"
+
+- name: Validate compose stack
+  ansible.builtin.command:
+    cmd: "{{ torotin_install_root }}/compose.d/run-compose.sh validate"
+  environment: "{{ torotin_installer_environment }}"
+  changed_when: false
+  no_log: "{{ torotin_hide_sensitive_logs | bool }}"
+
+- name: Show installation summary location
+  ansible.builtin.debug:
+    msg: "Torotin installer finished. Summary is on the server at {{ torotin_project_src }}/script/install-state/install.summary unless torotin_install_state_dir overrides it."

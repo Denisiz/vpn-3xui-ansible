@@ -1,0 +1,18 @@
+---
+- name: Bootstrap SSH user for VPN hosts
+  hosts: vpn
+  gather_facts: false
+  become: true
+
+  pre_tasks:
+    - name: Ensure Python is available for Ansible modules
+      ansible.builtin.raw: test -x /usr/bin/python3 || (apt-get update && apt-get install -y python3)
+      changed_when: false
+
+  roles:
+    - role: bootstrap_user
+
+  post_tasks:
+    - name: Show next step
+      ansible.builtin.debug:
+        msg: "Bootstrap complete. Update inventory to connect as {{ bootstrap_user }} with your SSH key, then run playbooks/10-install-3xui.yml."

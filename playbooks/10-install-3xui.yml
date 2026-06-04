@@ -1,0 +1,9 @@
+---
+- name: Install Torotin 3x-ui Docker stack
+  hosts: vpn
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: docker_host
+    - role: torotin_3xui

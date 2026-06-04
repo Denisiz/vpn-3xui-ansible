@@ -1,0 +1,4 @@
+inventory/hosts.ini
+group_vars/vpn.yml
+*.retry
+.ansible/

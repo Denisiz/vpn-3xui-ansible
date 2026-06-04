@@ -1,0 +1,34 @@
+---
+- name: Validate bootstrap variables
+  ansible.builtin.assert:
+    that:
+      - bootstrap_user is defined
+      - bootstrap_user | length > 0
+      - bootstrap_ssh_public_key is defined
+      - bootstrap_ssh_public_key | length > 20
+    fail_msg: "Set bootstrap_user and bootstrap_ssh_public_key in group_vars/vpn.yml."
+
+- name: Create bootstrap user
+  ansible.builtin.user:
+    name: "{{ bootstrap_user }}"
+    shell: /bin/bash
+    groups: sudo
+    append: true
+    create_home: true
+
+- name: Install SSH public key for bootstrap user
+  ansible.posix.authorized_key:
+    user: "{{ bootstrap_user }}"
+    key: "{{ bootstrap_ssh_public_key }}"
+    state: present
+    manage_dir: true
+
+- name: Allow passwordless sudo for bootstrap user
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ bootstrap_user }}"
+    owner: root
+    group: root
+    mode: "0440"
+    content: "{{ bootstrap_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    validate: "visudo -cf %s"
+  when: bootstrap_sudo_nopasswd | default(true) | bool

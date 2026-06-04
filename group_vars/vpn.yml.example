@@ -1,0 +1,35 @@
+---
+# Bootstrap user created by playbooks/00-bootstrap-user.yml.
+bootstrap_user: deployer
+bootstrap_sudo_nopasswd: true
+bootstrap_ssh_public_key: "ssh-ed25519 CHANGE_ME your_email@example.com"
+
+# Torotin installer source.
+torotin_repo_url: "https://github.com/Torotin/3x-ui_pro_Docker.git"
+torotin_repo_version: "main"
+torotin_project_src: "/srv/3x-ui_pro_Docker"
+
+# Torotin runtime paths.
+torotin_install_root: "/srv/docker-proxy"
+# torotin_install_state_dir: "/srv/3x-ui-installer-state"
+
+# Public domain and accounts used by Torotin installer.
+torotin_webdomain: "vpn.example.com"
+torotin_user_ssh: "{{ bootstrap_user }}"
+torotin_pass_ssh: "CHANGE_ME_TEMP_PASSWORD"
+torotin_ssh_port: 22022
+torotin_ssh_public_key: "{{ bootstrap_ssh_public_key }}"
+
+torotin_user_web: "admin"
+torotin_pass_web: "CHANGE_ME_STRONG_PASSWORD"
+
+# Explicit host-changing installer flags. Review these before running on a real host.
+torotin_destroy_docker_data: true
+torotin_apply_firewall: true
+torotin_apply_ssh: true
+torotin_apply_network: true
+
+# Optional maintenance behavior.
+torotin_run_self_update: false
+torotin_doctor_verbose: false
+torotin_hide_sensitive_logs: true
