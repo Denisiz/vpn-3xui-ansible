@@ -59,6 +59,22 @@
     path: "{{ torotin_project_src }}/script/install.sh"
     mode: "0755"
 
+- name: Find Torotin helper shell scripts
+  ansible.builtin.find:
+    paths: "{{ torotin_project_src }}"
+    patterns: "*.sh"
+    recurse: true
+    file_type: file
+  register: torotin_helper_scripts
+
+- name: Make Torotin helper shell scripts executable
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "0755"
+  loop: "{{ torotin_helper_scripts.files }}"
+  loop_control:
+    label: "{{ item.path | regex_replace('^' ~ torotin_project_src ~ '/', '') }}"
+
 - name: Check installer before changes
   ansible.builtin.command:
     cmd: "./script/install.sh doctor{% if torotin_doctor_verbose | bool %} --verbose{% endif %}"
@@ -82,14 +98,35 @@
   when: torotin_run_self_update | bool
   no_log: "{{ torotin_hide_sensitive_logs | bool }}"
 
-- name: Run Torotin batch installer
+- name: Run Torotin preparation steps
   ansible.builtin.shell: |
-    set -e
-    {
-      echo "== Torotin install started at $(date -Is) =="
-      ./script/install.sh run apt env docker user firewall ssh network compose final{% if torotin_destroy_docker_data | bool %} --destroy-docker-data{% endif %}{% if torotin_apply_firewall or torotin_apply_ssh or torotin_apply_network %} --apply --yes{% endif %}
-      echo "== Torotin install finished at $(date -Is) =="
-    } 2>&1 | tee "{{ torotin_installer_log_path }}"
+    set -euo pipefail
+    ./script/install.sh run apt env 2>&1 | tee "{{ torotin_installer_log_path }}"
+  args:
+    chdir: "{{ torotin_project_src }}"
+    executable: /bin/bash
+  environment: "{{ torotin_installer_environment }}"
+  no_log: "{{ torotin_hide_sensitive_logs | bool }}"
+
+- name: Find installed Torotin compose helper scripts
+  ansible.builtin.find:
+    paths: "{{ torotin_install_root }}/compose.d"
+    patterns: "*.sh"
+    file_type: file
+  register: torotin_installed_helper_scripts
+
+- name: Make installed Torotin compose helper scripts executable
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "0755"
+  loop: "{{ torotin_installed_helper_scripts.files }}"
+  loop_control:
+    label: "{{ item.path | regex_replace('^' ~ torotin_install_root ~ '/', '') }}"
+
+- name: Run Torotin host and compose steps
+  ansible.builtin.shell: |
+    set -euo pipefail
+    ./script/install.sh run docker user firewall ssh network compose final{% if torotin_destroy_docker_data | bool %} --destroy-docker-data{% endif %}{% if torotin_apply_firewall or torotin_apply_ssh or torotin_apply_network %} --apply --yes{% endif %} 2>&1 | tee -a "{{ torotin_installer_log_path }}"
   args:
     chdir: "{{ torotin_project_src }}"
     executable: /bin/bash
