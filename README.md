@@ -2,7 +2,24 @@
 
 Ansible wrapper for [Torotin/3x-ui_pro_Docker](https://github.com/Torotin/3x-ui_pro_Docker).
 
-The repository prepares a fresh Debian/Ubuntu server and runs the Torotin installer in batch mode. It is intentionally a small Ansible project with roles, inventory examples, variables, and a repeatable launch flow.
+The repository prepares a fresh Debian/Ubuntu server and runs the Torotin installer in batch mode. It is a small Ansible project with roles, inventory examples, variables, and a repeatable launch flow.
+
+## Detailed Guide
+
+Russian step-by-step setup guide:
+
+[docs/SETUP_RU.md](docs/SETUP_RU.md)
+
+It covers:
+
+- fresh VPS setup;
+- WSL quirks;
+- root password bootstrap;
+- SSH key login;
+- SSH port `22022`;
+- service URLs;
+- VPN client import;
+- troubleshooting.
 
 ## What It Does
 
@@ -11,11 +28,12 @@ The repository prepares a fresh Debian/Ubuntu server and runs the Torotin instal
 - Prepares base packages needed before the installer Docker step.
 - Clones `Torotin/3x-ui_pro_Docker`.
 - Passes installer variables through environment variables.
-- Runs `doctor`, `apt`, `env`, `docker`, `user`, `firewall`, `ssh`, `network`, `compose`, and `final`.
+- Runs Torotin installer steps in a reproducible way.
+- Fixes executable permissions for Torotin helper scripts where needed.
 - Validates the compose stack after installation.
-- Writes installer output on the server to `/var/log/torotin-3xui-install.log` by default.
+- Writes installer output on the server to `/var/log/torotin-3xui-install.log`.
 
-Torotin's installer owns Docker installation/reinstall, firewall, SSH, sysctl, compose, and final checks. This Ansible project does not reimplement that logic; it makes it reproducible.
+Torotin's installer owns Docker installation/reinstall, firewall, SSH, sysctl, compose, and final checks. This Ansible project does not reimplement that logic; it makes it repeatable.
 
 The installer repository under `torotin_project_src` is treated as disposable source code. By default, Ansible force-updates it before running installer steps.
 
@@ -33,6 +51,7 @@ Target server:
 - `systemd` and `apt`.
 - Root or sudo access for the first bootstrap.
 - A domain DNS record pointing to the server.
+- Recommended: 4 GB RAM, or 2 GB RAM with swap.
 
 Install Ansible collections:
 
@@ -56,10 +75,11 @@ vim inventory/hosts.ini
 vim group_vars/vpn.yml
 ```
 
-First run, usually with the provider's root password:
+First run, usually as `root` with the provider password:
 
 ```bash
-ansible-playbook playbooks/00-bootstrap-user.yml --ask-pass --ask-become-pass
+ANSIBLE_ROLES_PATH="$PWD/roles" \
+ansible-playbook -i inventory/hosts.ini playbooks/00-bootstrap-user.yml --ask-pass
 ```
 
 Then update `inventory/hosts.ini` to use `ansible_user=deployer` and your private key.
@@ -67,12 +87,15 @@ Then update `inventory/hosts.ini` to use `ansible_user=deployer` and your privat
 Second run, key-only:
 
 ```bash
-ansible-playbook playbooks/10-install-3xui.yml
+ANSIBLE_ROLES_PATH="$PWD/roles" \
+ansible-playbook -i inventory/hosts.ini playbooks/10-install-3xui.yml
 ```
+
+After installation, SSH usually moves to `torotin_ssh_port`, default `22022`.
 
 ## Important Variables
 
-`group_vars/vpn.yml` is intentionally ignored by git because it contains secrets.
+`group_vars/vpn.yml` is ignored by git because it contains secrets.
 
 ```yaml
 bootstrap_user: deployer
@@ -106,41 +129,48 @@ torotin_apply_ssh: true
 torotin_apply_network: true
 ```
 
-Torotin documents these as explicit host-changing actions. Use a fresh VPS unless you know exactly what is already running on the host.
+Use a fresh VPS unless you know exactly what is already running on the host.
 
 ## Troubleshooting
 
-If the installer step fails while Ansible output is hidden, inspect the server-side log:
+Installer log:
 
 ```bash
-ssh -p 22 deployer@YOUR_SERVER_IP
+ssh -p 22022 deployer@YOUR_SERVER_IP
 sudo tail -n 200 /var/log/torotin-3xui-install.log
 ```
 
-After SSH hardening has changed the port, use `-p 22022` or your configured `torotin_ssh_port`.
+Summary and service URLs:
+
+```bash
+sudo cat /srv/3x-ui_pro_Docker/script/install-state/install.summary
+```
+
+Compose status:
+
+```bash
+sudo /srv/docker-proxy/compose.d/run-compose.sh ps
+sudo /srv/docker-proxy/compose.d/run-compose.sh validate
+```
 
 ## Project Layout
 
 ```text
 vpn-3xui-ansible/
-├── ansible.cfg
-├── requirements.yml
-├── inventory/
-│   └── hosts.ini.example
-├── group_vars/
-│   └── vpn.yml.example
-├── playbooks/
-│   ├── 00-bootstrap-user.yml
-│   └── 10-install-3xui.yml
-└── roles/
-    ├── bootstrap_user/
-    ├── docker_host/
-    ├── ssh_hardening/
-    └── torotin_3xui/
+|-- ansible.cfg
+|-- requirements.yml
+|-- docs/
+|   `-- SETUP_RU.md
+|-- inventory/
+|   `-- hosts.ini.example
+|-- group_vars/
+|   `-- vpn.yml.example
+|-- playbooks/
+|   |-- 00-bootstrap-user.yml
+|   `-- 10-install-3xui.yml
+`-- roles/
+    |-- bootstrap_user/
+    |-- docker_host/
+    |-- ssh_hardening/
+    `-- torotin_3xui/
 ```
-
-## Notes
-
-- If `torotin_ssh_public_key` is set, the Torotin installer switches SSH to public key auth.
-- After SSH hardening, reconnect using `torotin_ssh_port`.
-- The Torotin install summary is usually written on the server to `{{ torotin_project_src }}/script/install-state/install.summary`.
